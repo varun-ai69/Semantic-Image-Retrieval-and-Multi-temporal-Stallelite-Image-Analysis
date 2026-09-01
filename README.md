@@ -7,7 +7,7 @@
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 Modern defense analysts require the capability to query satellite imagery archives **by semantic meaning** (e.g. *"find airstrips with visible hangars near river bends"*) rather than relying strictly on geographic coordinates or metadata dates. Additionally, the system must automatically flag **true multi-temporal changes** (such as new construction, land clearance, road development, or water-extent shifts) while suppressing false alarms caused by cloud coverage, seasonal variations, sun angles, or spatial misalignment.
 
@@ -93,7 +93,7 @@ All backend services are version-controlled under the `/api/v1` base route prefi
 
 ---
 
-## ⚡ Quickstart Guide (Local Infrastructure)
+## Quickstart Guide (Local Infrastructure) - To launch the containers and use local Db & vector DB use this
 
 ### 1. Environment Preparation
 ```bash
