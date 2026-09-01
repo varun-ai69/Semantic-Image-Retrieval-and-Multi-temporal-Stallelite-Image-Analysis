@@ -1,0 +1,81 @@
+services:
+
+  # --- Postgres + PostGIS -----------------------------------------------
+  # Official Postgres image with PostGIS extension pre-installed.
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: eo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eo_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eo_password}
+      POSTGRES_DB: ${POSTGRES_DB:-eo_archive}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../backend/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ../backend/db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eo_admin} -d ${POSTGRES_DB:-eo_archive}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Qdrant (Vector DB) -----------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: eo_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Qdrant Collection & Payload Index Initializer -------------------
+  # Runs once when Qdrant is healthy to set up tile_embeddings collection
+  # and all payload filter indexes.
+  qdrant-init:
+    image: python:3.11-slim
+    container_name: eo_qdrant_init
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=tile_embeddings
+    volumes:
+      - ../backend/db/vector_schema.py:/app/vector_schema.py:ro
+    entrypoint: >
+      sh -c "
+      pip install --no-cache-dir qdrant-client &&
+      python /app/vector_schema.py
+      "
+
+  # --- MinIO (S3-Compatible Local Object Storage) ----------------------
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: eo_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-eo_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-eo_password}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  minio_data:

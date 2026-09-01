@@ -35,14 +35,14 @@ The system enforces a strict separation between ingestion-time heavy precomputat
     +-------v-------+                +-------v-------+                +-------v-------+
     |   Qdrant DB   |                |  PostgreSQL / |                |  Local Files /|
     | (Embeddings & |                |    PostGIS    |                | TiTiler COGs  |
-    |  Clusters)    |                | (Meta & Cache)|                | File Storage  |
+    |  Clusters)    |                | (Meta & Cache)|                | MinIO Storage |
     +---------------+                +---------------+                +---------------+
 ```
 
 ### Three Storage Layers
 1. **Vector DB (Qdrant)**: Stores 512-dim RemoteCLIP embeddings for text-to-image search, image-to-image search, and HDBSCAN cluster IDs.
 2. **Relational & Spatial DB (PostgreSQL + PostGIS)**: Stores scene/tile metadata, spatial boundaries (`GEOMETRY(Polygon, 4326)`), precomputed change events, analyst review decisions, and export audit logs.
-3. **File/Object Storage**: Holds raw Earth Observation imagery and preprocessed Cloud-Optimized GeoTIFFs (COGs) served locally via `titiler`.
+3. **File/Object Storage (MinIO / Local)**: Holds raw Earth Observation imagery and preprocessed Cloud-Optimized GeoTIFFs (COGs).
 
 ---
 
@@ -53,7 +53,6 @@ The system enforces a strict separation between ingestion-time heavy precomputat
 ├── ProjectContext.md                       # Single source of truth for project requirements & schema
 ├── README.md                               # Primary project guide & repository documentation
 ├── PROVENANCE.md                           # Data & model provenance tracking audit log
-├── docker-compose.yml                      # Container orchestration for PostGIS, Qdrant, Backend, Frontend
 ├── .env.example                            # Configuration environment variables template
 ├── docs/                                   # Architectural notes & evaluation benchmark harness reports
 ├── data/                                   # Git-ignored data staging (raw imagery, 512x512 tiles, training sets)
@@ -62,7 +61,7 @@ The system enforces a strict separation between ingestion-time heavy precomputat
 │   ├── api/                                # REST API routers & Intent Routing Agent
 │   │   ├── routers/                        # Endpoints (/api/v1/search, /change, /discover, /queue, /export)
 │   │   └── agent/                          # Query classifier & tools (vector search, spatial lookup, change resolver)
-│   ├── db/                                 # PostGIS SQLAlchemy models & database migrations
+│   ├── db/                                 # PostGIS SQLAlchemy models, schema.sql, seed.sql, vector_schema.py
 │   ├── services/                           # Qdrant client wrapper, analyst reranker, quality filtering
 │   ├── ingestion/                          # Preprocessing, cloud masking, co-registration, embedding & change inference
 │   ├── training/                           # Offline fine-tuning scripts (RemoteCLIP & Siamese change models)
@@ -72,8 +71,9 @@ The system enforces a strict separation between ingestion-time heavy precomputat
 │       ├── components/                     # MapView, AOIDrawTool, SearchBar, ResultsGrid, ReviewQueue, LocationDetail
 │       ├── pages/                          # Intelligence dashboard & analyst workspace views
 │       └── api/                            # REST API client layer
-└── infra/                                  # Infrastructure dockerfiles & offline staging scripts
-    ├── docker/                             # Dockerfiles for backend, frontend, and titiler COG server
+└── infra/                                  # Infrastructure docker-compose & offline staging scripts
+    ├── docker-compose.yml                  # Container orchestration for PostGIS, Qdrant, MinIO
+    ├── docker/                             # Placeholder directory for application Dockerfiles
     └── scripts/                            # Offline dependency staging & network-isolated testing scripts
 ```
 
@@ -93,7 +93,7 @@ All backend services are version-controlled under the `/api/v1` base route prefi
 
 ---
 
-## ⚡ Quickstart Guide (Local Development)
+## ⚡ Quickstart Guide (Local Infrastructure)
 
 ### 1. Environment Preparation
 ```bash
@@ -105,16 +105,17 @@ cd Semantic-Image-Retrieval-and-Multi-temporal-Stallelite-Image-Analysis
 cp .env.example .env
 ```
 
-### 2. Launch Local Containers
+### 2. Launch Local Database & Vector Containers
 ```bash
-docker-compose up -d --build
+docker compose -f infra/docker-compose.yml up -d
 ```
 
 ### 3. Service Access Endpoints
-- **Frontend Dashboard**: `http://localhost:3000`
-- **FastAPI API Documentation**: `http://localhost:8000/docs`
+- **PostgreSQL / PostGIS**: `localhost:5434` (database: `eo_archive`, user: `eo_admin`, password: `eo_password`)
+- **Qdrant Vector DB REST API**: `http://localhost:6333`
 - **Qdrant Vector Dashboard**: `http://localhost:6333/dashboard`
-- **TiTiler COG Tile Server**: `http://localhost:8080`
+- **MinIO Object Storage S3 API**: `http://localhost:9000`
+- **MinIO Web Console**: `http://localhost:9001` (user: `eo_admin`, password: `eo_password`)
 
 ---
 
